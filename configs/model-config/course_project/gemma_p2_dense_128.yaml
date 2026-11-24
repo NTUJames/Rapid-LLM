@@ -1,0 +1,30 @@
+model_param:
+  mode: LLM
+  run_type: inference
+  model_id: gemma_3_4b
+  model_type: llama
+  tied_embeddings: true
+  global_batch_size: 16
+  gradient_accumulation_steps: 1
+  seq_len: 8320
+  decode_len: 128
+  hidden_dim: 2560
+  num_layers: 34
+  vocab_size: 262208
+  intermediate_size: 10240
+  attention:
+    attention_type: gqa
+    num_heads: 8
+    kv_heads: 4
+    head_dim: 256
+    use_flashattention: true
+    attention_tile_size: 128
+  moe:
+    num_experts: 1
+    top_k: 1
+    moe_intermediate_size: 10240
+    n_shared_experts: 0
+    moe_layer_freq: 1
+    first_k_dense_replace: 34
+inference_param:
+  sample_every: -1

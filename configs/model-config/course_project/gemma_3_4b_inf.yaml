@@ -1,8 +1,8 @@
 # Model: Gemma 3 4B, text backbone only (dense, sliding window)
 # Source: https://huggingface.co/google/gemma-3-4b-pt
 # Project: 2 (sliding-window attention)
-# Note: 5 local layers (window w = 1024) for every global layer. RAPID-LLM refuses the
-#   window on GPU until Project 2 adds it; delete the window: block to run it dense.
+# Note: 5 local layers (window w = 1024) for every global layer.
+#   Delete the window: block to run the same model with dense attention.
 
 model_param:
   mode: "LLM"                         # LLM, or GEMM for a single matrix multiply

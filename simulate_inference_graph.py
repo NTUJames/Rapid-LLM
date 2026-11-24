@@ -184,7 +184,19 @@ class DecodeGraph(Graph):
         if last_step not in sample_points:
             sample_points.append(last_step)
 
-        return sorted(sample_points)
+        # Local decode cost stops growing once context reaches the window.
+        # Sample both sides of this knee rather than interpolate across it.
+        window = getattr(self.model_config.model_config.attention, "window", None)
+        if window is not None and any(
+            not window.is_global_layer(i, self.config.num_layers)
+            for i in range(self.config.num_layers)
+        ):
+            saturation_step = window.window_size - self.config.seq_len - 1
+            for step in (saturation_step - 1, saturation_step, saturation_step + 1):
+                if 0 <= step <= last_step:
+                    sample_points.append(step)
+
+        return sorted(set(sample_points))
 
     def _execute_decode_step(
         self,

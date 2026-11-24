@@ -1394,13 +1394,20 @@ class AttentionWindowConfig:
     Every other layer is LOCAL: it attends to at most the last ``window_size``
     tokens. With N = 6 that is layers 5, 11, 17, ... global.
 
-    Nothing prices the window yet: validate_model_config refuses a model that
-    declares one with local layers.
+    Local layers use a bounded KV cache and causal banded attention in inference.
     """
 
     window_size: int
     local_global_interval: int
     last_layer_global: bool
+
+    def is_global_layer(self, layer_index: int, num_layers: int) -> bool:
+        """Classify a zero-based layer using the model's local/global pattern."""
+        return (
+            self.local_global_interval <= 1
+            or (self.last_layer_global and layer_index == num_layers - 1)
+            or (layer_index + 1) % self.local_global_interval == 0
+        )
 
     @classmethod
     def from_dict(cls, window_dict: Dict[str, object]) -> "AttentionWindowConfig":
@@ -2458,12 +2465,19 @@ def validate_model_config(hw_config: HWConfig, model_config: ModelConfig) -> Non
         raise ValueError("Unsupported model config type for validation")
 
     window = getattr(getattr(model, "attention", None), "window", None)
-    if window is not None and int(window.local_global_interval) != 1:
-        raise ValueError(
-            "model_param.attention.window is declared, but nothing prices it yet: every "
-            "attention op is priced against the full KV context, so a local layer would be "
-            "charged as global. Remove the window block, or add the pricing."
-        )
+    if window is not None and any(
+        not window.is_global_layer(i, model.num_layers) for i in range(model.num_layers)
+    ):
+        if str(model.run_type).lower() != "inference":
+            raise ValueError("Sliding-window attention is supported for inference only.")
+        if any(degree != 1 for degree in (tp, cp, pp)):
+            raise ValueError("Sliding-window attention currently supports single-GPU inference only.")
+        if model.use_moe or model.attention.attention_type == "mla":
+            raise ValueError("Sliding-window attention currently supports dense MHA/GQA models only.")
+        if not model.use_flashattention:
+            raise ValueError("Sliding-window prefill requires attention.use_flashattention=true.")
+        if str(hw_config.execution_backend.model).lower() != "analytical":
+            raise ValueError("Sliding-window attention requires the analytical execution backend.")
 
     if model.use_moe and model.top_k > model.num_experts:
         raise ValueError("model_param.moe.top_k cannot exceed model_param.moe.num_experts")

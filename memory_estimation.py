@@ -654,6 +654,21 @@ class MemoryEstimator:
                     * 2.0
                 )
 
+        kv_cache_by_layer = {}
+        window = getattr(tc, "attention_window", None)
+        if mode != "training" and window is not None and any(
+            not window.is_global_layer(i, tc.num_layers) for i in range(tc.num_layers)
+        ):
+            tokens = int(kv_cache_tokens or 0)
+            bytes_per_token = kv_cache_bytes_per_layer / tokens if tokens else 0.0
+            kv_cache_by_layer["kv_cache_bytes_by_layer"] = [
+                bytes_per_token * (
+                    tokens if window.is_global_layer(i, tc.num_layers)
+                    else min(tokens, window.window_size)
+                )
+                for i in range(tc.num_layers)
+            ]
+
         param_gather_bytes = 0.0
         if mode == "training" and zero3_ephemeral_peak_bytes and dp > 1 and zero_stage >= 3:
             param_gather_bytes = float(zero3_ephemeral_peak_bytes)
@@ -691,6 +706,7 @@ class MemoryEstimator:
             "transient_bytes_by_kind_moe": transient_bytes_by_kind_moe,
             "extra_static_bytes_per_device": extra_static_bytes_per_device,
             "kv_cache_bytes_per_layer": kv_cache_bytes_per_layer,
+            **kv_cache_by_layer,
             "zero3_ephemeral_peak_bytes": zero3_ephemeral_peak_bytes,
             "param_gather_bytes": param_gather_bytes,
         }

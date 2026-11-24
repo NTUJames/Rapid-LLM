@@ -1,0 +1,66 @@
+{
+  "created_utc": "2026-11-24T08:51:11.048942+00:00",
+  "python": "3.12.16",
+  "platform": "Linux-4.4.0-19041-Microsoft-x86_64-with-glibc2.35",
+  "packages": {
+    "numpy": "2.3.3",
+    "pandas": "2.3.1",
+    "PyYAML": "6.0.2",
+    "graphviz": "0.21",
+    "matplotlib": "3.10.7"
+  },
+  "source_sha256": {
+    "base_timing.py": "87356c21fc282ca5e76dcd781ac236a62fd72393fad149eff3dd71f13d2d72a3",
+    "config.py": "c7d7f097edd61a6b0175e7488f42cb2d451f62ff34916673ad5b084aa1f4faa3",
+    "configs/hardware-config/course_project/a100_80GB_1gpu.yaml": "2909ee54c67890fcdf4038162ab5bfec39d9b88d3c4e7f8a996419342c20e886",
+    "configs/model-config/course_project/gemma_3_4b_inf.yaml": "0a6714c93a106ef4a0c899d97a403aa0c93dcd678bdebc160f9c63f1715b994e",
+    "extended_timing.py": "ee9e67607ce421d7c768a188a4c64f250d744a1dd424cba66830eb3a211cab7c",
+    "hw_component.py": "bc1344d1a414409d6f1651d9e269a077146d6a5a874fd28cbe8efd20a2cd5d2e",
+    "inference_timing.py": "90fcc7343e5cfb8908987454954a137d519fa780dec7df9f5d4e62b9f266d4d9",
+    "llm_execution.py": "f0197e14215073da7f51b10dfa311549764630f2790dad40fd3b4134d1ea8c28",
+    "llm_util.py": "555989e4e1b7ccccfd4084880fd03c8b6358243c3b813631cdb4e3f35d1dc644",
+    "memory_estimation.py": "ab79c5ee006f4fdd7ccf862ab2927336607e0b539b8868d209afa6dd1b0abb5e",
+    "reproduce.py": "0cdebb06d2e305987e16867773f1b847e2e20905ec332c3677cc855f71b764cc",
+    "requirements.txt": "42416ae9063d88204652bf5157ec834040419b09351fea19a296310c24e290f3",
+    "run_perf.py": "bdd8ba8f97a389457de30082b23adc56411e2712e466cbec7a78895aed6898f5",
+    "run_project2.py": "1c46db72f7fdc53c7ef346b2d8997e142b3045b5a7d848475815af2f5f8ba1dc",
+    "simulate_inference_graph.py": "949f9aefcd60737a20aaeaa1a3139aab891fb2e4474d1294c7df3962ec4963fa",
+    "simulate_train_graph.py": "14a37bffba5422d21fe9dd6fb433136433e3f1a4de905fa084f4fae673636271",
+    "tile.py": "e2e5c55edaf1ba8c9dee7048990369752f1ab22e78628e37c18d1ce2abd4dccd",
+    "timing_model.py": "6b055e9f50161d20189d5d8a3ba09f1c603f76b57a34cd6cf3591c28faa68464",
+    "train_timing.py": "36776c058d370936e183aef3ff82a136b087d1d17770a9b966e08d6cfb0d00a7",
+    "util.py": "54965fe983e3f131f39a54ea0abff27c8f5399fdf86d17290c5ca4c99659fd28"
+  },
+  "wall_clock_s": 121.27186000000006,
+  "command": "python reproduce.py",
+  "experiments": {
+    "prompts": [
+      512,
+      1024,
+      2048,
+      4096,
+      8192,
+      16384
+    ],
+    "windows": [
+      256,
+      512,
+      1024,
+      2048,
+      4096,
+      16384
+    ],
+    "case_study_batch": 4,
+    "case_study_output": 128,
+    "required_batch": 16,
+    "required_outputs": [
+      128,
+      256
+    ]
+  },
+  "plot_regeneration": {
+    "created_utc": "2026-11-24T08:53:03.617902+00:00",
+    "script_sha256": "1ec8412caa394dc79dd54ca70ead6bc87c494c2909706e9a6d4d5bb19c193c81",
+    "command": "python reproduce.py --plots-only"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "environment": "fresh local Git clone and isolated Python 3.12 venv; not a GitHub fork clone",
+  "table_rows": 23,
+  "unique_simulations": 21,
+  "figures": 3,
+  "relative_tolerance": 1e-12,
+  "checks": [
+    "requirements installed from scratch; pip check passed",
+    "quick invariants passed",
+    "full one-shot run completed",
+    "CSV/JSON/config/log/peak consistency",
+    "all case studies fit within capacity",
+    "required results match earlier baseline within tolerance",
+    "maximum-batch boundaries verified",
+    "PNG/SVG files validated",
+    "plots-only run completed"
+  ]
+}

@@ -1158,8 +1158,11 @@ class TimeCalculationLLM(TimeCalculation):
         )
         return reduction_time
 
-    def flash_attention_kernel_forward(self, batch_size, hidden_dim, seq_len, num_heads, kv_heads, num_SMs) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
-        """Return time for flash attention kernel."""
+    def flash_attention_kernel_forward(
+        self, batch_size, hidden_dim, seq_len, num_heads, kv_heads, num_SMs,
+        *, window_size: Optional[int] = None,
+    ) -> Tuple[float, float, float, float, float]:
+        """Price full causal attention or the tiles intersecting a local window."""
         
         shard_seq = math.ceil(seq_len / max(1, self.cp)) 
         head_dim = getattr(self, "head_dim", None)
@@ -1184,7 +1187,13 @@ class TimeCalculationLLM(TimeCalculation):
                     continue
                 if max_c >= Tc:
                     max_c = Tc - 1
-                active_tiles += max_c + 1
+                # A tile is active if it intersects the causal window of any
+                # query in this row tile. As in dense attention, boundary tiles
+                # are charged in full (there is no within-tile mask discount).
+                min_c = 0
+                if window_size is not None:
+                    min_c = max(0, r * Br - window_size + 1) // Bc
+                active_tiles += max(0, max_c - min_c + 1)
         else:
             active_tiles = Tc * Tr
 

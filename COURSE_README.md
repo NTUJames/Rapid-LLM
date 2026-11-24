@@ -60,11 +60,12 @@ batch each side can hold. No multi-GPU or routing code is needed.
 ### Project 2: sliding-window attention (Gemma 3 4B)
 
 Gemma 3 has 5 local layers, which attend only to the last w = 1024 tokens, for every global layer.
-Today RAPID-LLM refuses such a model. Make it price local layers in decode, prefill and memory,
-and compare with dense attention: time per token, prefill time, peak memory and largest batch.
+Sliding-window timing and memory are implemented for single-GPU analytical inference with dense MHA/GQA
+models and FlashAttention prefill. Run `python run_project2.py --find-max-batch` for the required
+dense/sliding comparison: time per token, prefill time, peak memory and largest batch.
 
-- `AttentionWindowConfig` (config.py) holds the parsed window and the local/global layer rule; the
-  refusal is in `validate_model_config`. The window reaches the timing object as
+- `AttentionWindowConfig` (config.py) holds the parsed window and the local/global layer rule;
+  `is_global_layer` implements that rule. The window reaches the timing object as
   `self._raw_model_config.model_config.attention.window`.
 - H4: price a local layer once (decode: `_build_decode_transformer_results` at a context of
   min(S, w)), name each layer's kind in `layer_block_kinds`, and pass both where

@@ -55,6 +55,15 @@ class TimeCalculationLLMInference(TimeCalculationLLM):
     def __init__(self, hw_config, model_config, mode, output_dir: Optional[str] = None):
         super().__init__(hw_config, model_config, mode, output_dir)
         self._raw_model_config = model_config
+        self.attention_window = model_config.model_config.attention.window
+        self.layer_block_kinds = ()
+        if self.attention_window is not None:
+            kinds = tuple(
+                "dense" if self.attention_window.is_global_layer(i, self.num_layers) else "local"
+                for i in range(self.num_layers)
+            )
+            if "local" in kinds:
+                self.layer_block_kinds = kinds
 
     def _build_decode_transformer_results(
         self,
@@ -636,6 +645,22 @@ class TimeCalculationLLMInference(TimeCalculationLLM):
                 query_tokens=query_tokens,
             )
 
+        block_timings_by_kind = None
+        if self.layer_block_kinds:
+            local_context = min(total_seq_len, self.attention_window.window_size)
+            if local_context == total_seq_len:
+                local_results = transformer_timings, node_breakdown
+            else:
+                # Rebuild attention shapes at the bounded context. The query
+                # count, projections, FFN, and output head retain their shapes.
+                local_results = self._build_decode_transformer_results(
+                    batch_size=batch_size,
+                    total_seq_len=local_context,
+                    use_moe_layer=False,
+                    query_tokens=query_tokens,
+                )
+            block_timings_by_kind = {"local": local_results}
+
         output_act_bytes = decode_gemm_shapes_dense["qkv_proj"][0] * decode_gemm_shapes_dense["qkv_proj"][1] * self.precision_bytes
         energy = self.calc_energy(transformer_timings, output_act_bytes)
 
@@ -667,8 +692,8 @@ class TimeCalculationLLMInference(TimeCalculationLLM):
             include_pipeline_backward=False,
             include_transformer_backward=False,
             gemm_shapes=decode_gemm_shapes_moe if self.use_moe else decode_gemm_shapes_dense,
-            block_timings_by_kind=None,  # helper H4: extra layer kinds (Project 2)
-            layer_block_kinds=(),
+            block_timings_by_kind=block_timings_by_kind,
+            layer_block_kinds=self.layer_block_kinds,
         ), energy
     
     def calc_energy(self, transformer_timings: Dict[str, OperationTiming], cross_layer_comm) -> float:
@@ -783,6 +808,31 @@ class TimeCalculationLLMInference(TimeCalculationLLM):
                     use_moe_override=True,
                 )
 
+            block_timings_by_kind = None
+            if self.layer_block_kinds:
+                # Only attention changes. Reuse the projection/FFN/head timings
+                # instead of repricing every GEMM (including unused backward).
+                local_time, local_compute, local_comm, local_bytes, local_mem = self.flash_attention_kernel_forward(
+                    batch_size, hidden_dim, prefill_len, num_heads, kv_heads, num_SMs,
+                    window_size=self.attention_window.window_size,
+                )
+                local_timings = dict(transformer_timings)
+                local_timings["attention"] = OperationTiming(
+                    "attention",
+                    forward=DirectionTiming(
+                        compute_time=local_compute, comm_time=local_comm,
+                        comm_bytes=int(local_bytes or 0),
+                        memory_accesses=dict(self._mem_levels(local_mem)),
+                    ),
+                )
+                local_breakdown = dict(node_breakdown)
+                local_breakdown["transformer_time_f"] += (
+                    local_time - transformer_timings["attention"].total_forward_time()
+                )
+                local_breakdown["transformer_time_b"] = 0.0
+                local_breakdown["transformer_time_b_combined"] = 0.0
+                block_timings_by_kind = {"local": (local_timings, local_breakdown)}
+
             output_act_bytes = batch_size * prefill_len * hidden_dim * self.precision_bytes
             total_energy = self.calc_energy(transformer_timings, output_act_bytes)
 
@@ -828,8 +878,8 @@ class TimeCalculationLLMInference(TimeCalculationLLM):
                 vocab_size=vocab_size,
                 include_pipeline_backward=False,
                 include_transformer_backward=False,
-                block_timings_by_kind=None,  # helper H4: extra layer kinds (Project 2)
-                layer_block_kinds=(),
+                block_timings_by_kind=block_timings_by_kind,
+                layer_block_kinds=self.layer_block_kinds,
             )
 
             self.pipeline_graph = pipeline_graph
@@ -949,6 +999,8 @@ class TimeCalculationLLMInference(TimeCalculationLLM):
                 self.pipeline_graph = original_pipeline_graph
 
         max_peak_gb = max(prefill_peak_gb, decode_peak_gb)
+        self.prefill_peak_gb = prefill_peak_gb
+        self.decode_peak_gb = decode_peak_gb
         self.memory_peak_gb = max_peak_gb
 
         hardware_mem_bytes = getattr(self.DRAM, "size", None)
@@ -1086,6 +1138,22 @@ class TimeCalculationLLMInference(TimeCalculationLLM):
         decode_fetch_bytes = token_bytes * num_layers * (
             decode_len * (prefill_len + self.seq_len) // 2
         )
+        if self.layer_block_kinds:
+            local_layers = self.layer_block_kinds.count("local")
+            global_layers = num_layers - local_layers
+            window_size = self.attention_window.window_size
+
+            def capped_context_sum(length):
+                short = min(length, window_size)
+                return short * (short + 1) // 2 + max(0, length - window_size) * window_size
+
+            # Match decode's contexts P+1, ..., P+D. Store counters count
+            # writes, including ring-buffer overwrites, rather than occupancy.
+            global_reads = decode_len * (2 * prefill_len + decode_len + 1) // 2
+            local_reads = capped_context_sum(self.seq_len) - capped_context_sum(prefill_len)
+            decode_fetch_bytes = token_bytes * (
+                global_layers * global_reads + local_layers * local_reads
+            )
 
         def _to_gib(byte_val: int) -> str:
             gib_val = byte_val / (1024 ** 3)

@@ -36,6 +36,7 @@ from __future__ import annotations
 import math
 import warnings
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Optional
 
 # The backend only prices 2-byte (bf16/fp16) GEMMs.
@@ -310,10 +311,11 @@ def create(hw_config: Any) -> ExtendedRooflineGemmBackend:
     return ExtendedRooflineGemmBackend(hw_config)
 
 
+@lru_cache(maxsize=4096)
 def _select_gemm_kernel(
     problem: GemmProblemSpec, gpu: GpuSpec
 ) -> GemmCandidateEvaluation:
-    """Rank the catalog cheaply, price the shortlist, pick the best kernel."""
+    """Price kernels once per immutable problem/GPU pair, including across runs."""
     ranked = sorted(
         _GEMM_KERNEL_CATALOG,
         key=lambda kernel: _cheap_kernel_score(kernel, problem, gpu),

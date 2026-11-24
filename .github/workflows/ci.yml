@@ -3,7 +3,7 @@ name: ci
 on: [push, pull_request]
 
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -11,6 +11,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -r requirements.txt pytest
-      - name: Unit tests
-        run: pytest -q
+        run: python -m pip install -r requirements.txt
+      - name: Verify sliding-window invariants
+        run: python reproduce.py --verify-only

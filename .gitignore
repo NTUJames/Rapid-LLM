@@ -18,3 +18,4 @@ tmp/
 output*/
 memory-summary/
 *.et
+results/project2/runs/
